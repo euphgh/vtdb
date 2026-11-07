@@ -1,7 +1,10 @@
 # 迁移到独立仓库
 
-`vtdb` 目前放在 REMUS 仓库的 `tools/vtdb/` 下，但不依赖 REMUS 的任何代码，
-只使用 Python 标准库。本文给出把它拆成独立仓库的步骤。
+`vtdb` 已于 2026 年 11 月从 REMUS 仓库的 `tools/vtdb/` 迁出到
+<https://github.com/euphgh/vtdb>，REMUS 侧不再保留副本。
+
+本文保留当时的迁移步骤供追溯；文中的前提检查与检查清单均已完成，
+后续维护以独立仓库为准。
 
 ## 1. 前提检查
 

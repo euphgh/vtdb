@@ -8,13 +8,14 @@
 **范围约定：一次导入只对应一份报告，一个 SQLite 文件就是一份报告的完整快照。**
 工具不管理多个报告，也不做跨报告对比；需要对照两次运行时，直接用两份 `.db` 文件。
 
-文中的规模、耗时和分布数据来自两份真实报告（REMUS 仓库的构建产物，不随本文档发布）：
+文中的规模、耗时和分布数据来自两份真实报告（REMUS 项目的构建产物，仅作历史样本，
+不随本文档发布）：
 
 - `build/synth_timing.rpt`：36.9 MB，310,399 行，`role_top` / `Synthesized`；
 - `build/post_route_timing.rpt`：208.7 MB，1,577,594 行，`xiangshan_wrapper` /
   `Physopt postRoute`。
 
-两份报告由 REMUS 仓库的 `fpga/**/scripts/flow/*.tcl` 以同一条命令生成：
+两份报告由 REMUS 项目的 `fpga/**/scripts/flow/*.tcl` 以同一条命令生成：
 
 ```tcl
 report_timing_summary -file <dir>/<name>_timing.rpt -delay_type max -max_paths 1000
