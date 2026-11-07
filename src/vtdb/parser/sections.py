@@ -13,6 +13,7 @@ from .lexer import (
     _fnum,
     _inum,
 )
+from .model import CheckTimingRow
 
 SECTION_PREFIXES = (
     ("Timing Summary Report", "top"),
@@ -55,7 +56,7 @@ class TopSections:
         self.meta: dict[str, str] = {}
         self.design: dict[str, float | int | None] = {}
         self.constraints_met: int | None = None
-        self.checks: dict[int, list[object]] = {}
+        self.checks: dict[int, CheckTimingRow] = {}
         self.clocks: list[tuple[str, str | None, int]] = []
         self.current_check: int | None = None
         self._clock_values: dict[str, tuple[str | None, float | None, float | None]] = {}
@@ -96,7 +97,8 @@ class TopSections:
         """Write the accumulated check_timing and clock rows."""
         for seq in sorted(self.checks):
             row = self.checks[seq]
-            self.writer.add_check_timing(seq, row[1], row[2], row[3], row[4])
+            self.writer.add_check_timing(
+                row.seq, row.category, row.count, row.severity, row.detail)
         for name, parent, indent in self.clocks:
             self.writer.add_clock(
                 name, parent, indent,
@@ -209,12 +211,13 @@ class TopSections:
         if match:
             seq = int(match.group(1))
             self.current_check = seq
-            self.checks[seq] = [seq, match.group(2), int(match.group(3)), None, ""]
+            self.checks[seq] = CheckTimingRow(
+                seq, match.group(2), int(match.group(3)))
             return
         if not line.startswith(" ") or self.current_check is None:
             return
         row = self.checks[self.current_check]
         severity = re.search(r"\((HIGH|MEDIUM|LOW)\)", line)
         if severity:
-            row[3] = severity.group(1)
-        row[4] = (row[4] + " " + line.strip()).strip()
+            row.severity = severity.group(1)
+        row.detail = (row.detail + " " + line.strip()).strip()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from .lexer import RE_NUM2, _fnum, split_delay_type, split_prefix
+from .model import PathStats
 
 
 def split_segment(line: str, pending):
@@ -76,26 +77,25 @@ def split_segment(line: str, pending):
     return None, None
 
 
-def update_stats(stats: dict, block: str, record: dict) -> None:
+def update_stats(stats: PathStats, block: str, record: dict) -> None:
     """Update path level statistics from one detail row.
 
     Args:
-        stats: Mutable statistics dictionary of the current path.
+        stats: Mutable statistics of the current path.
         block: Detail block the row belongs to.
         record: Parsed detail row.
     """
-    stats["n_seg"] = int(stats.get("n_seg", 0)) + 1
+    stats.n_seg += 1
     incr = record.get("incr_ns")
     if block == "data" and incr is not None:
-        stats["sum_data"] = float(stats.get("sum_data", 0.0)) + incr
-        stats["n_data"] = int(stats.get("n_data", 0)) + 1
+        stats.sum_data += incr
+        stats.n_data += 1
     fanout = record.get("fanout")
     if fanout is not None:
-        current = stats.get("fanout")
-        stats["fanout"] = fanout if current is None else max(current, fanout)
+        stats.fanout = fanout if stats.fanout is None else max(stats.fanout, fanout)
     site = record.get("site")
     if site and record.get("cell_type"):
         if block == "launch_clock":
-            stats["src_site"] = site
-        elif block == "capture_clock" and stats.get("dst_site") is None:
-            stats["dst_site"] = site
+            stats.src_site = site
+        elif block == "capture_clock" and stats.dst_site is None:
+            stats.dst_site = site

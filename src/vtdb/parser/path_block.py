@@ -16,6 +16,7 @@ from .lexer import (
     SUBFIELD_MAP,
     _fnum,
 )
+from .model import PathStats
 from .path_fields import apply_path_field
 from .path_writer import finish_path, should_store
 from .segments import split_segment, update_stats
@@ -42,7 +43,7 @@ class PathBlock:
         self.active = False
         self.pair: dict[str, object] = {}
         self.path: dict[str, object] | None = None
-        self.stats: dict[str, object] = {}
+        self.stats: PathStats = PathStats()
         self.next_seq = 1
         self.mode: str | None = None
         self.block_index = 0
@@ -75,7 +76,7 @@ class PathBlock:
         self.block_index = 0
         self.separators = 0
         self.seg_seq = 0
-        self.stats = {}
+        self.stats = PathStats()
 
     def feed(self, lineno: int, line: str) -> None:
         """Handle one line of a path block.
@@ -103,8 +104,7 @@ class PathBlock:
                 "slack": slack,
                 "slack_status": match.group(1),
             }
-            self.stats = {"sum_data": 0.0, "fanout": None, "src_site": None,
-                          "dst_site": None, "n_seg": 0, "n_data": 0}
+            self.stats = PathStats()
             self.mode = "path_head"
             return
 

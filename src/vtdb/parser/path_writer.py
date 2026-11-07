@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..db import DbWriter
 from .lexer import RE_LEVEL_ITEM
+from .model import PathStats
 
 
 def cell_name(pin: str | None) -> str | None:
@@ -71,7 +72,7 @@ def record_issue(writer: DbWriter, issues: list, lineno: int | None,
     writer.add_issue(lineno, severity, code, message, None)
 
 
-def check_path(writer: DbWriter, path: dict, stats: dict, issues: list) -> None:
+def check_path(writer: DbWriter, path: dict, stats: PathStats, issues: list) -> None:
     """Run consistency checks on one finished path.
 
     Args:
@@ -90,15 +91,15 @@ def check_path(writer: DbWriter, path: dict, stats: dict, issues: list) -> None:
                 f"required - arrival = {required - arrival:.3f}, slack = {slack:.3f}")
     if path.get("timing_exception") or path.get("data_delay_ns") is None:
         return
-    total = float(stats.get("sum_data", 0.0))
-    tolerance = 0.001 * int(stats.get("n_data", 0)) + 0.002
+    total = stats.sum_data
+    tolerance = 0.001 * stats.n_data + 0.002
     if abs(total - float(path["data_delay_ns"])) > tolerance:
         record_issue(
             writer, issues, path["line_start"], "warning", "delay_mismatch",
             f"sum(incr)={total:.3f} != data_delay={float(path['data_delay_ns']):.3f}")
 
 
-def finish_path(writer: DbWriter, path: dict, stats: dict, lineno: int,
+def finish_path(writer: DbWriter, path: dict, stats: PathStats, lineno: int,
                 keep_detail: str, hier: bool, issues: list) -> None:
     """Finish one path and write its rows.
 
@@ -112,11 +113,11 @@ def finish_path(writer: DbWriter, path: dict, stats: dict, lineno: int,
         issues: Shared list receiving ``(line, severity, code, message)``.
     """
     path["line_end"] = lineno
-    path["n_seg"] = stats.get("n_seg", 0)
-    path["n_data_seg"] = stats.get("n_data", 0)
-    path["fanout_max"] = stats.get("fanout")
-    path["src_site"] = stats.get("src_site")
-    path["dst_site"] = stats.get("dst_site")
+    path["n_seg"] = stats.n_seg
+    path["n_data_seg"] = stats.n_data
+    path["fanout_max"] = stats.fanout
+    path["src_site"] = stats.src_site
+    path["dst_site"] = stats.dst_site
     path["keep_detail"] = int(should_store(keep_detail, path))
 
     source = path.get("source_pin")

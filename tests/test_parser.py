@@ -2,9 +2,8 @@
 
 These tests describe the current parser contract: how raw report lines are
 split into records, which derived fields reach the database, and how the
-consistency checks behave.  They are the safety net for splitting
-``parser.py`` into a package, so they assert current behaviour rather than an
-idealized one.
+consistency checks behave.  They guard the parser package against refactoring
+regressions, so they assert current behaviour rather than an idealized one.
 """
 
 from __future__ import annotations
@@ -445,3 +444,25 @@ def test_path_sequence_continues_across_clock_pairs(tmp_path: Path) -> None:
     rows = conn.execute("SELECT seq, section_seq FROM path ORDER BY seq").fetchall()
     assert [(row["seq"], row["section_seq"]) for row in rows] == [(1, 1), (2, 2)]
     assert conn.execute("SELECT COUNT(*) FROM clock_pair").fetchone()[0] == 2
+
+
+def test_check_timing_rows_keep_severity_and_detail(tmp_path: Path) -> None:
+    """check_timing categories keep their count, severity and detail text."""
+    text = (
+        "check_timing report\n\n"
+        "1. checking no_clock (2)\n"
+        "    There are 2 register/latch pins with no clock. (HIGH)\n"
+        "2. checking no_input_delay (0)\n"
+        "    There are 0 input ports with no input delay. (LOW)\n"
+    )
+    conn, _ = parse_text(tmp_path, text)
+    rows = conn.execute(
+        "SELECT seq, category, count, severity, detail FROM check_timing ORDER BY seq"
+    ).fetchall()
+    assert [(row["seq"], row["category"], row["count"], row["severity"])
+            for row in rows] == [
+        (1, "no_clock", 2, "HIGH"),
+        (2, "no_input_delay", 0, "LOW"),
+    ]
+    assert "2 register/latch pins" in rows[0]["detail"]
+    assert "0 input ports" in rows[1]["detail"]
