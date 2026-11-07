@@ -1,0 +1,58 @@
+# vtdb
+
+Turn one Vivado `report_timing_summary` text report into one SQLite database, so
+paths can be filtered, joined and aggregated with SQL instead of `grep`.
+
+One report per database, five commands, no service, no configuration file,
+Python standard library only.
+
+## Install
+
+```bash
+uv tool install .        # or: pipx install .
+# development
+uv sync && uv run vtdb --version
+```
+
+Without installing: `PYTHONPATH=src python -m vtdb --help`.
+Single-file zipapp and standalone binaries are described in
+[docs/development/packaging.md](docs/development/packaging.md).
+
+## Quick start
+
+```bash
+vtdb import build/post_route_timing.rpt   # writes post_route_timing.db
+vtdb top --fail-only -n 20                # worst paths
+vtdb path 42                              # one path with its detail rows
+vtdb stats --by group                     # aggregate by path group
+vtdb stats --by module --level 3          # aggregate by hierarchy prefix
+vtdb sql "SELECT COUNT(*) FROM path WHERE slack < 0"
+```
+
+Query commands pick the database from `--db`, then `VTD_DB`, then the single
+`*.db` file in the current directory.
+
+## Documentation
+
+Start at [docs/index.md](docs/index.md):
+
+- [Usage guide](docs/guides/usage.md) — install, quick start, triage recipes
+- [Data model](docs/design/database.md) — report structure, parser, SQLite schema
+- [CLI reference](docs/design/cli.md) — commands, options, exit codes
+- [Improvement plan](docs/design/improvements.md) — known usability gaps
+- [Packaging](docs/development/packaging.md) — uv / pip / zipapp / binaries
+- [Extraction](docs/development/extraction.md) — moving out of the REMUS repo
+
+## Development
+
+```bash
+uv run pytest tests -q
+make zipapp            # build dist/vtdb.pyz
+```
+
+`tests/data/mini_timing.rpt` is a trimmed report that exercises wrapped detail
+rows, hidden names, clock domain crossings and pulse width checks.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

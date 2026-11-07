@@ -1,0 +1,24 @@
+version = 1
+revision = 3
+requires-python = ">=3.9"
+
+[[package]]
+name = "nuitka"
+version = "4.3.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/19/9e0a68ea7bf6124843eaf2163430edc80569d4ce33511928e3958c960fb3/nuitka-4.3.4.tar.gz", hash = "sha256:e98e0c9a3224b581cf8ec0fab92b039b90fb7fa78673550c22833a82de444b25", size = 4779496, upload-time = "2026-11-01T07:44:15.061Z" }
+
+[[package]]
+name = "vtdb"
+version = "0.1.0"
+source = { editable = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "nuitka" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "nuitka", specifier = ">=4.3.4" }]
