@@ -19,128 +19,36 @@ Design notes that matter for correctness:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
-from .db import DbWriter, sha256_file
-
-RE_META = re.compile(r"^\| ([A-Za-z][A-Za-z ]*?)\s*:\s+(.*?)\s*$")
-RE_SLACK = re.compile(r"^Slack \((MET|VIOLATED)\)\s*:\s*(-?[\d.]+|NA|inf)ns")
-RE_FIELD = re.compile(r"^  ([A-Za-z][A-Za-z0-9 ()/^.,+-]*?)\s*:\s+(.*?)\s*$")
-RE_SUBF = re.compile(r"^    (\S.*?)\s*:\s+(-?[\d.]+)ns")
-RE_PAIR = re.compile(
-    r"^(Setup|Hold|PW)\s*:\s*(\S+)\s+Failing Endpoints,\s+Worst Slack\s+(\S+?)\s*,"
-    r"\s+Total Violation\s+(\S+)"
+from ..db import DbWriter, sha256_file
+from .lexer import (
+    BLOCK_NAMES,
+    RE_CELL_CLOCK,
+    RE_CHECK,
+    RE_CLKNET,
+    RE_CLOCK_ROW,
+    RE_DATA_DELAY,
+    RE_DESIGN_ROW,
+    RE_FIELD,
+    RE_LEVELS,
+    RE_LEVEL_ITEM,
+    RE_META,
+    RE_NUM2,
+    RE_PAIR,
+    RE_REQUIREMENT,
+    RE_SEP,
+    RE_SEP2,
+    RE_SLACK,
+    RE_SUBF,
+    SUBFIELD_MAP,
+    _fnum,
+    _inum,
+    split_delay_type,
+    split_prefix,
 )
-RE_CHECK = re.compile(r"^(\d+)\. checking (\w+) \((\d+)\)")
-RE_NUM2 = re.compile(r"(-?\d+\.\d{3})\s+(-?\d+\.\d{3})")
-RE_DATA_DELAY = re.compile(
-    r"(-?[\d.]+)ns\s+\(logic\s+(-?[\d.]+)ns\s+\(([\d.]+)%\)\s+route\s+(-?[\d.]+)ns\s+\(([\d.]+)%\)\)"
-)
-RE_REQUIREMENT = re.compile(r"^(-?[\d.]+|inf)ns\s*(?:\((.*)\))?")
-RE_LEVELS = re.compile(r"^(\d+)\s+\((.*)\)$")
-RE_LEVEL_ITEM = re.compile(r"([A-Za-z][A-Za-z0-9_]*)=(\d+)")
-RE_CLKNET = re.compile(r"^(-?[\d.]+)ns\s+\(routing\s+(-?[\d.]+)ns,\s+distribution\s+(-?[\d.]+)ns\)")
-RE_CELL_CLOCK = re.compile(r"edge-triggered (?:cell|pin) (\S+) clocked by (\S+)")
-RE_SEP2 = re.compile(r"^\s*-{10,}\s{2,}-{5,}\s*$")
-RE_SEP = re.compile(r"^\s*-{10,}\s*$")
-RE_CLOCK_ROW = re.compile(r"^(\S.*?)\s{2,}(\{[^}]+\})\s{2,}(-?[\d.]+)\s{2,}(-?[\d.]+)\s*$")
-RE_DESIGN_ROW = re.compile(
-    r"^\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(\d+)\s+(\d+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(\d+)\s+(\d+)"
-)
-RE_CMD_OPTION = r"-{option}\s+(?:(\"[^\"]*\")|(\S+))"
-
-BLOCK_NAMES = ("launch_clock", "data", "capture_clock")
-LOC_START = 4
-TYPE_START = 25
-
-
-def split_prefix(line: str) -> tuple[str | None, int]:
-    """Split the ``Location`` and ``Delay type`` columns of a detail row.
-
-    Vivado prints the location starting at column 4 and the delay type at
-    column 25.  A location longer than the column pushes the delay type to the
-    right, so the split is detected instead of hard coded.
-
-    Args:
-        line: Raw report line.
-
-    Returns:
-        ``(location, delay_type_start)``.
-    """
-    match = re.match(r"^ {4}(\S+)\s{2,}", line)
-    if match and match.end() > TYPE_START:
-        return match.group(1), match.end()
-    if len(line) <= TYPE_START:
-        return None, TYPE_START
-    return line[LOC_START:TYPE_START].strip() or None, TYPE_START
-
-SUBFIELD_MAP = {
-    "Destination Clock Delay (DCD)": "dcd_ns",
-    "Source Clock Delay (SCD)": "scd_ns",
-    "Clock Pessimism Removal (CPR)": "cpr_ns",
-    "Total System Jitter (TSJ)": "tsj_ns",
-    "Total Input Jitter (TIJ)": "tij_ns",
-    "Discrete Jitter (DJ)": "dj_ns",
-    "Phase Error (PE)": "pe_ns",
-}
-
-
-def _fnum(text: str | None) -> float | None:
-    """Convert text to ``float`` when possible.
-
-    Args:
-        text: Numeric text or ``None``.
-
-    Returns:
-        Parsed float or ``None``.
-    """
-    if text is None:
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
-
-def _inum(text: str | None) -> int | None:
-    """Convert decimal text to ``int`` when possible.
-
-    Args:
-        text: Decimal text or ``None``.
-
-    Returns:
-        Parsed integer or ``None``.
-    """
-    if text is None or not text.isdigit():
-        return None
-    return int(text)
-
-
-def split_delay_type(text: str | None) -> tuple[bool, str | None, str | None, int | None]:
-    """Split a ``Delay type`` cell into (is_net, cell_type, pin_func, fanout)."""
-    if not text:
-        return False, None, None, None
-    if text.startswith("net"):
-        match = re.search(r"fo=(\d+)", text)
-        return True, None, text, int(match.group(1)) if match else None
-    match = re.match(r"^([A-Za-z][A-Za-z0-9_]*)\s*\((.*)\)$", text)
-    if match:
-        return False, match.group(1), match.group(2), None
-    if re.fullmatch(r"[A-Z][A-Z0-9_]+", text):
-        return False, text, None, None
-    return False, None, text, None
-
-
-@dataclass
-class ParseResult:
-    """Summary of one parsed report."""
-
-    meta: dict[str, str] = field(default_factory=dict)
-    counts: dict[str, int] = field(default_factory=dict)
-    issues: list[tuple[int | None, str, str, str]] = field(default_factory=list)
-    design: dict[str, float | int | None] = field(default_factory=dict)
+from .model import ParseResult
+from .report import write_report
 
 
 class ReportParser:
@@ -202,7 +110,15 @@ class ReportParser:
         for name, parent, indent in self.clocks:
             self.writer.add_clock(name, parent, indent, *self._clock_values.get(name, (None, None, None)))
 
-        self._write_report()
+        write_report(
+            self.writer,
+            self.report_path,
+            self._sha,
+            self.meta,
+            self.design,
+            self.constraints_met,
+            self.writer.counts,
+        )
         self.result.meta = self.meta
         self.result.design = self.design
         self.result.counts = dict(self.writer.counts)
@@ -830,91 +746,3 @@ class ReportParser:
             return
         self.writer.add_clock_pair(self.pair)
         self.pair = {}
-
-    def _write_report(self) -> None:
-        """Write the single ``report`` row from parsed metadata.
-        """
-        command = self.meta.get("Command", "")
-        delay_type = self._command_option(command, "delay_type")
-        max_paths = self._command_option(command, "max_paths")
-        design_state = self.meta.get("Design State")
-        run_date = self._parse_date(self.meta.get("Date"))
-        self.writer.add_report({
-            "singleton": 1,
-            "source_file": str(self.report_path),
-            "file_sha256": self._sha,
-            "file_size": self.report_path.stat().st_size,
-            "stage": self._stage(design_state),
-            "tool_version": self.meta.get("Tool Version"),
-            "run_date": run_date,
-            "host": self.meta.get("Host"),
-            "command": command,
-            "design_name": self.meta.get("Design"),
-            "device": self.meta.get("Device"),
-            "speed_file": self.meta.get("Speed File"),
-            "design_state": design_state,
-            "temp_grade": self.meta.get("Temperature Grade"),
-            "delay_type": delay_type,
-            "max_paths": int(max_paths) if max_paths and max_paths.isdigit() else None,
-            "constraints_met": self.constraints_met,
-            "n_paths": self.writer.counts["paths"],
-            "n_segments": self.writer.counts["segments"],
-            "n_pw_checks": self.writer.counts["pw"],
-            **{key: self.design.get(key) for key in (
-                "wns", "tns", "tns_failing", "tns_total",
-                "wpws", "tpws", "tpws_failing", "tpws_total")},
-        })
-
-    @staticmethod
-    def _command_option(command: str, option: str) -> str | None:
-        """Return the value of one option of the report command.
-
-        Args:
-            command: Full ``report_timing_summary`` command line.
-            option: Option name without the leading dash.
-
-        Returns:
-            Option value or ``None``.
-        """
-        match = re.search(rf"-{option}\s+(\S+)", command)
-        return match.group(1) if match else None
-
-    @staticmethod
-    def _parse_date(text: str | None) -> str | None:
-        """Convert the report date to ISO 8601.
-
-        Args:
-            text: Date string as printed in the report header.
-
-        Returns:
-            ISO 8601 timestamp, or the original text when parsing fails.
-        """
-        if not text:
-            return None
-        normalized = re.sub(r"\s+", " ", text.strip())
-        try:
-            return datetime.strptime(normalized, "%a %b %d %H:%M:%S %Y").isoformat()
-        except ValueError:
-            return text
-
-    @staticmethod
-    def _stage(design_state: str | None) -> str | None:
-        """Map the Vivado design state to a short stage name.
-
-        Args:
-            design_state: Value of the ``Design State`` header field.
-
-        Returns:
-            ``synth``, ``post_place``, ``post_route`` or ``None``.
-        """
-        if not design_state:
-            return None
-        state = design_state.lower()
-        if "postroute" in state:
-            return "post_route"
-        if "postplace" in state:
-            return "post_place"
-        if "synth" in state:
-            return "synth"
-        return None
-
