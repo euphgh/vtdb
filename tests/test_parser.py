@@ -28,6 +28,7 @@ from vtdb.parser import (  # noqa: E402
     ReportParser,
     split_delay_type,
     split_prefix,
+    split_segment,
 )
 
 
@@ -114,7 +115,7 @@ def test_split_delay_type_variants() -> None:
 
 def test_split_segment_full_row() -> None:
     """A full detail row carries location, arc, timing and resource."""
-    record, pending = ReportParser._split_segment(fixture_line(125), None)
+    record, pending = split_segment(fixture_line(125), None)
     assert pending is None
     assert record is not None
     assert record["site"] is None
@@ -129,7 +130,7 @@ def test_split_segment_full_row() -> None:
 
 def test_split_segment_pin_row() -> None:
     """A pin row has a location and transition but no delay columns."""
-    record, pending = ReportParser._split_segment(fixture_line(123), None)
+    record, pending = split_segment(fixture_line(123), None)
     assert pending is None
     assert record is not None
     assert record["site"] == "SLICE_X0Y0"
@@ -143,7 +144,7 @@ def test_split_segment_pin_row() -> None:
 
 def test_split_segment_clock_edge_row() -> None:
     """A clock edge row has numbers but no location or delay type."""
-    record, pending = ReportParser._split_segment(fixture_line(120), None)
+    record, pending = split_segment(fixture_line(120), None)
     assert pending is None
     assert record is not None
     assert record["site"] is None
@@ -157,7 +158,7 @@ def test_split_segment_clock_edge_row() -> None:
 
 def test_split_segment_net_row() -> None:
     """A net row is tagged as a net and keeps its fanout."""
-    record, pending = ReportParser._split_segment(fixture_line(122), None)
+    record, pending = split_segment(fixture_line(122), None)
     assert pending is None
     assert record is not None
     assert record["is_net"] == 1
@@ -169,11 +170,11 @@ def test_split_segment_net_row() -> None:
 
 def test_split_segment_wrapped_row_merges_pending_location() -> None:
     """A wrapped Location + Delay type pair is merged into the next line."""
-    record, pending = ReportParser._split_segment(fixture_line(128), None)
+    record, pending = split_segment(fixture_line(128), None)
     assert record is None
     assert pending == ("SLICE_X1Y2", "LUT6 (Prop_LUT6_I1_O)")
 
-    record, pending = ReportParser._split_segment(fixture_line(129), pending)
+    record, pending = split_segment(fixture_line(129), pending)
     assert pending is None
     assert record is not None
     assert record["site"] == "SLICE_X1Y2"
@@ -432,3 +433,15 @@ def test_slack_mismatch_is_reported(tmp_path: Path) -> None:
     _, result = parse_text(tmp_path, text)
     assert [issue[2] for issue in result.issues] == ["slack_mismatch"]
     assert "required - arrival" in result.issues[0][3]
+
+
+def test_path_sequence_continues_across_clock_pairs(tmp_path: Path) -> None:
+    """Path sequence numbers keep increasing across clock pair sections."""
+    text = EDGE_FIXTURE.read_text(encoding="utf-8")
+    block = text[text.index("From Clock:"):]
+    conn, result = parse_text(tmp_path, text.rstrip() + "\n\n" + block)
+
+    assert result.counts["paths"] == 2
+    rows = conn.execute("SELECT seq, section_seq FROM path ORDER BY seq").fetchall()
+    assert [(row["seq"], row["section_seq"]) for row in rows] == [(1, 1), (2, 2)]
+    assert conn.execute("SELECT COUNT(*) FROM clock_pair").fetchone()[0] == 2
