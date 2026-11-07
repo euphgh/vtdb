@@ -46,7 +46,7 @@ path 14438
 **是否需要改：需要。** CDC 判断是时序分诊的第一步，而且这条信息的缺失导致多执行一次
 SQL 查询。JSON 输出已经包含这些字段，不存在数据缺口。
 
-**方案**：在 `cmd_path` 的摘要块里增加两行，并把摘要渲染抽成可单测的函数：
+**方案**：在 `commands/path.py` 的 `path_summary_lines()` 中增加两行（该函数已经可单测）：
 
 ```text
   clocks        xdma_ep_axi_aclk -> mmcm_clkout0
@@ -61,7 +61,7 @@ SQL 查询。JSON 输出已经包含这些字段，不存在数据缺口。
 - `--format json` 不变，仍输出完整字段；
 - `#` 列语义不变，退出码不变。
 
-**改动量**：`cli.py` 约 20 行（新增 `_print_path_summary(path)` 与 `_wrap()`），
+**改动量**：`commands/path.py` 约 20 行（扩展 `path_summary_lines()` 并新增 `_wrap()`），
 测试 +2（摘要含 clocks 行、含 CDC 折行）。风险低。
 
 ### 3.2 `path` 长名字折行或省略
@@ -97,7 +97,7 @@ def shorten_name(name: str, limit: int = 80, head: int = 2, tail: int = 3) -> st
 - `--wide` 输出完整名字（现有语义保持不变）；
 - JSON 始终是完整名字。
 
-**改动量**：`cli.py` 约 15 行，单元测试 +3（短名不变、超长省略、`--wide` 全名）。
+**改动量**：`commands/path.py` 约 15 行，单元测试 +3（短名不变、超长省略、`--wide` 全名）。
 风险低，仅显示层变化。
 
 ### 3.3 `stats --by module` 增加过滤
@@ -137,7 +137,7 @@ xiangshan_i/u_role/inst/Part0FabricRouterWra_0    132   132  -0.086       -3.623
 - 对 `--by group` / `--by clock-pair` 暂不生效（本次只改 module，避免一次铺开）。
 
 **改动量**：`queries.stats_module_sql` 约 25 行（新增三个 WHERE 条件），
-`cli.py` 约 10 行（参数与传参），测试 +3。风险中低：需要把"过滤后计数"的语义写进
+`commands/stats.py` 与 `commands/args.py` 约 10 行（参数与传参），测试 +3。风险中低：需要把"过滤后计数"的语义写进
 `--help` 和文档，避免误读。
 
 ### 3.4 `top --group` 支持子串匹配
@@ -171,7 +171,8 @@ $ echo $?
 - 匹配仍区分大小写（与 SQLite `LIKE` 默认行为一致，需要大小写不敏感时用 `sql`）；
 - 退出码不变（空结果仍为 0）。
 
-**改动量**：`queries.top_sql` 约 5 行，`cli.py` 约 8 行（`--exact` 与空结果提示），
+**改动量**：`queries.top_sql` 约 5 行，`commands/top.py` 与 `commands/args.py` 约 8 行
+（`--exact` 与空结果提示），
 测试 +2。风险：默认行为变化属于不兼容改动，需要在 README 与本文记录，脚本可用
 `--exact` 固定旧行为。
 
@@ -179,10 +180,10 @@ $ echo $?
 
 | 项 | 是否值得改 | 改动位置 | 代码量 | 兼容性 | 优先级 |
 | --- | --- | --- | --- | --- | --- |
-| 3.1 `path` 显示 clocks / CDC | 是 | `cli.py` | ~20 行 | 只增输出 | P1 |
-| 3.4 `--group` 子串 + 空结果提示 | 是 | `queries.py`、`cli.py` | ~13 行 | 默认行为变化 | P1 |
-| 3.2 长名字省略 | 是 | `cli.py` | ~15 行 | 只改显示 | P2 |
-| 3.3 `stats --by module` 过滤 | 是 | `queries.py`、`cli.py` | ~35 行 | 只增选项 | P2 |
+| 3.1 `path` 显示 clocks / CDC | 是 | `commands/path.py` | ~20 行 | 只增输出 | P1 |
+| 3.4 `--group` 子串 + 空结果提示 | 是 | `queries.py`、`commands/top.py`、`commands/args.py` | ~13 行 | 默认行为变化 | P1 |
+| 3.2 长名字省略 | 是 | `commands/path.py` | ~15 行 | 只改显示 | P2 |
+| 3.3 `stats --by module` 过滤 | 是 | `queries.py`、`commands/stats.py`、`commands/args.py` | ~35 行 | 只增选项 | P2 |
 
 合计约 **120 行代码 + 80 行测试 + 文档更新**，不涉及 `schema.sql`、解析器和数据库迁移。
 
@@ -199,7 +200,7 @@ $ echo $?
 | 3.3 | `stats --by module --fail-only --group shell_aclk` 的 `PATHS` 等于 `FAIL`；不加过滤时数值与改动前一致 |
 | 3.4 | `top --group shell_aclk` 能命中；`--exact` 时仍返回空；空结果带过滤提示 |
 
-现有测试（27 个）应全部保持通过；新增用例按上表补充。
+现有测试应全部保持通过；新增用例按上表补充。
 
 ## 6. 本次不做的项
 

@@ -32,14 +32,36 @@
 
 ```text
 src/vtdb/
-├── parser.py     # 报告解析状态机（最复杂，改动风险最高）
-├── db.py         # SQLite 写入、schema 加载、resource/hier 字典化
-├── schema.sql    # 表结构的唯一权威来源
-├── queries.py    # top / stats / path 的 SQL 构造
-├── cli.py        # argparse、五个子命令、输出组装
-└── output.py     # table / json / csv / tsv / md 渲染
-tests/test_cli.py         # 端到端 CLI 测试
-tests/data/mini_timing.rpt # 裁剪过的真实格式夹具
+├── parser/           # 报告解析包（最复杂，改动风险最高）
+│   ├── core.py       # ReportParser：读循环、章节分发
+│   ├── lexer.py      # 正则与纯行拆分（split_prefix 等）
+│   ├── sections.py   # Timer/Design/Clock/Intra/Inter/Other/check_timing
+│   ├── details.py    # clock pair、路径调度、PW 表
+│   ├── path_block.py # 单条路径状态机
+│   ├── path_fields.py# 路径头字段
+│   ├── path_writer.py# 派生字段、写库、不变量校验
+│   ├── segments.py   # 明细行拆分、pending 合并、段统计
+│   ├── model.py      # ParseResult / PathStats / CheckTimingRow
+│   └── report.py     # report 行构造
+├── commands/         # 五个子命令与 CLI 公共设施
+│   ├── args.py       # argparse 命令树
+│   ├── common.py     # 退出码、找库、取数、格式化
+│   ├── columns.py    # 输出列定义
+│   ├── import_cmd.py # import
+│   ├── top.py        # top
+│   ├── path.py       # path 与摘要渲染
+│   ├── stats.py      # stats
+│   └── sql.py        # sql
+├── cli.py            # main + 异常映射（薄入口）
+├── db.py             # SQLite 写入、schema 加载、resource/hier 字典化
+├── schema.sql        # 表结构的唯一权威来源
+├── queries.py        # top / stats / path 的 SQL 构造
+└── output.py         # table / json / csv / tsv / md 渲染
+tests/test_cli.py          # 端到端 CLI 测试
+tests/test_cli_contract.py # JSON / 退出码 / help 契约
+tests/test_parser.py       # 解析器纯函数与路径级测试
+tests/data/mini_timing.rpt # 裁剪过的真实格式夹具（折行、PW、汇总表）
+tests/data/edge_timing.rpt # hidden / CDC / exception / 折行夹具
 ```
 
 关键入口与职责：
@@ -47,14 +69,16 @@ tests/data/mini_timing.rpt # 裁剪过的真实格式夹具
 | 位置 | 职责 |
 | --- | --- |
 | `ReportParser.run()` | 单遍流式解析整份报告 |
-| `ReportParser._line()` | 按章节分发每一行 |
-| `ReportParser._details_line()` / `_path_line()` | 路径块、clock pair、PW 表 |
-| `ReportParser._split_segment()` | 明细行拆分 + 折行 pending |
-| `ReportParser._finish_path()` | 派生字段、层次前缀、一致性检查 |
+| `ReportParser._line()` | 章节识别与分发 |
+| `TopSections.feed()` | Timer / Design / Clock / 汇总表 / check_timing |
+| `DetailsParser.feed()` | clock pair、路径模式切换、PW 表 |
+| `PathBlock.feed()` | 单条路径的头字段与明细表 |
+| `segments.split_segment()` | 明细行拆分 + 折行 pending |
+| `path_writer.finish_path()` | 派生字段、层次前缀、写库、一致性检查 |
 | `DbWriter` | 批量写入、`resource` / `hier_node` 字典化 |
 | `schema_sql()` | 通过 `importlib.resources` 读取内置 schema（兼容 zipapp/单文件二进制） |
 | `queries.top_sql()` 等 | 把 CLI 选项翻译成 SQL |
-| `cmd_import()` / `cmd_top()` / `cmd_path()` / `cmd_stats()` / `cmd_sql()` | 命令实现 |
+| `commands/*.py` 的 `cmd_*()` | 命令实现 |
 
 数据流：
 
@@ -89,9 +113,9 @@ report.rpt ──ReportParser──> DbWriter ──> SQLite ──queries──
 ## 6. 修改流程
 
 1. **先复现**：用 `tests/data/mini_timing.rpt` 或手边真实报告导入一个库，确认现象。
-2. **再改代码**：优先改 `queries.py` / `cli.py`；只有格式确实不同才动 `parser.py`。
-3. **补测试**：每个行为变化至少加一个 `tests/test_cli.py` 用例；解析器改动要覆盖
-   夹具里的折行、隐藏名、CDC、exception 路径。
+2. **再改代码**：优先改 `queries.py` / `commands/`；只有格式确实不同才动 `parser/`。
+3. **补测试**：每个行为变化至少加一个测试；解析器改动要覆盖 `tests/data/mini_timing.rpt`
+   的折行/PW 与 `tests/data/edge_timing.rpt` 的隐藏名、CDC、exception 路径。
 4. **跑验证**：`uv run pytest tests -q` 或 `python -m pytest tests -q`。
 5. **同步文档**：命令/选项变化改 `docs/design/cli.md`；数据结构变化改
    `docs/design/database.md`；用户可见行为改 `docs/guides/usage.md`。
@@ -99,7 +123,8 @@ report.rpt ──ReportParser──> DbWriter ──> SQLite ──queries──
 
 ## 7. 当前待办
 
-`docs/design/improvements.md` 里列了四项已评估的改进，按建议顺序实施：
+`docs/design/improvements.md` 里列了四项已评估的改进（结构重构已完成，以下是功能项），
+按建议顺序实施：
 
 1. `path` 输出增加 launch/capture 时钟与 CDC 说明；
 2. `top --group` 改为子串匹配（保留 `--exact`），空结果给出过滤提示；

@@ -50,8 +50,9 @@ uv run pytest tests -q
 make zipapp            # build dist/vtdb.pyz
 ```
 
-`tests/data/mini_timing.rpt` is a trimmed report that exercises wrapped detail
-rows, hidden names, clock domain crossings and pulse width checks.
+`tests/data/mini_timing.rpt` is a trimmed report with wrapped detail rows,
+summary tables and pulse width checks. `tests/data/edge_timing.rpt` covers
+hidden endpoints, clock domain crossings and timing exceptions.
 
 ## License
 

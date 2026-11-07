@@ -36,10 +36,13 @@ pyproject.toml
 src/vtdb/
     __init__.py
     __main__.py        # python -m vtdb
-    cli.py             # argparse 定义与分发
-    parser.py          # 报告解析
+    cli.py             # main、异常映射（薄入口）
+    commands/          # argparse、列定义、五个命令
+    parser/            # 流式解析包（core / sections / details / path）
+    db.py              # SQLite 写入与 schema 加载
     schema.sql         # DDL
-    queries.py         # 各命令的 SQL 与格式化
+    queries.py         # 各命令的 SQL
+    output.py          # table / json / csv / tsv / md 渲染
 ```
 
 ```bash
@@ -422,7 +425,10 @@ if {[catch {exec vtdb import ${impl_rpt_dir}/post_route_timing.rpt --force --qui
 
 ## 11. 测试与验收
 
-`tests/test_cli.py`（pytest），使用裁剪过的迷你报告 `tests/data/mini_timing.rpt`：
+`tests/test_cli.py`（pytest），使用裁剪过的迷你报告 `tests/data/mini_timing.rpt`；
+`tests/test_parser.py` 覆盖解析器纯函数与路径级字段，`tests/test_cli_contract.py`
+锁定 JSON 键名、帮助面与退出码，`tests/data/edge_timing.rpt` 覆盖 hidden / CDC /
+exception 路径。
 
 | 用例 | 断言 |
 | --- | --- |
