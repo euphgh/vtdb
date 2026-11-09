@@ -27,6 +27,8 @@ WNS −0.319 ns）时，四个问题直接影响了排障效率：
 
 ## 3. 逐项评估
 
+> 本节保留原始评估。重构后的具体落点、接口和测试要求见第 8 节。
+
 ### 3.1 `path` 显示时钟域与 CDC 说明
 
 **现状**（`vtdb path 14438 --no-segments`）：
@@ -134,7 +136,8 @@ xiangshan_i/u_role/inst/Part0FabricRouterWra_0    132   132  -0.086       -3.623
 - 过滤先于聚合：`PATHS`、`FAIL`、`WNS`、`TNS(SAMPLE)` 都是过滤后集合上的统计量；
 - `--min-paths` 作用于过滤后的计数；
 - 三个选项组合时是 AND 关系；
-- 对 `--by group` / `--by clock-pair` 暂不生效（本次只改 module，避免一次铺开）。
+- 这三个选项只对 `--by module` 生效；与 `--by group` / `--by clock-pair` 组合时报用法错误
+  （退出码 2），不静默忽略。
 
 **改动量**：`queries.stats_module_sql` 约 25 行（新增三个 WHERE 条件），
 `commands/stats.py` 与 `commands/args.py` 约 10 行（参数与传参），测试 +3。风险中低：需要把"过滤后计数"的语义写进
@@ -168,7 +171,7 @@ $ echo $?
 
 - `--group shell_aclk` 等价于 `path_group LIKE '%shell_aclk%'`；
 - `--group shell_aclk --exact` 等价于 `path_group = 'shell_aclk'`；
-- 匹配仍区分大小写（与 SQLite `LIKE` 默认行为一致，需要大小写不敏感时用 `sql`）；
+- SQLite `LIKE` 对 ASCII 默认不区分大小写；需要严格区分大小写时用 `sql`；
 - 退出码不变（空结果仍为 0）。
 
 **改动量**：`queries.top_sql` 约 5 行，`commands/top.py` 与 `commands/args.py` 约 8 行
@@ -226,3 +229,321 @@ PYTHONPATH=src python3 -m vtdb stats --db build/vtdb/part0.db --by module --leve
 # 3.4 部分组名返回空
 PYTHONPATH=src python3 -m vtdb top --db build/vtdb/part0.db --group shell_aclk --fail-only
 ```
+
+## 8. 重构后的实现方案
+
+本节基于 Stage 0–5 之后的 `parser/` + `commands/` 结构，给出四项改动的最终落点、
+接口、SQL 和测试要求。**本节只是实施规约，尚未实现。**
+
+四项改动都不涉及 `schema.sql`、解析器和数据库迁移：所有需要的字段（`cdc_note`、
+`section_from_clock`、`section_to_clock`、`path_group`）已经在现有库中，旧库不需要重导。
+
+### 8.1 落点总表
+
+| 项 | 主要落点 | 辅助改动 |
+| --- | --- | --- |
+| 3.1 `path` 显示 clocks / CDC | `commands/path.py::path_summary_lines()` | `commands/path.py::_wrap_labeled()` |
+| 3.4 `top --group` 子串匹配 | `queries.py::top_sql()` | `commands/top.py`、`commands/args.py` |
+| 3.2 `path` 长名字省略 | `commands/path.py::shorten_name()` | `commands/path.py::path_summary_lines()` |
+| 3.3 `stats --by module` 过滤 | `queries.py::stats_module_sql()` | `commands/stats.py`、`commands/args.py` |
+
+建议按 3.1 → 3.4 → 3.2 → 3.3 的顺序实施。3.1 和 3.2 都改 `path_summary_lines()`，
+3.2 在 3.1 的基础上增加 `wide` 参数即可；3.4 和 3.3 的 `--group` 采用同一套子串语义。
+
+### 8.2 3.1 `path` 显示 clocks 与 CDC
+
+**最终接口**（3.2 完成后）：
+
+```python
+def path_summary_lines(path: dict, *, wide: bool = False) -> list[str]:
+    ...
+```
+
+**输出位置**：
+
+- `clocks` 行放在 `group` 之后、`requirement` 之前；
+- `cdc` 行放在 `exception` 之后，仅当 `path["cdc_note"]` 非空时输出。
+
+**格式**：
+
+```text
+path 14438
+  slack         -0.319 ns   VIOLATED
+  type          Setup  (Max, Slow corner)
+  group         mmcm_clkout0
+  clocks        xdma_ep_axi_aclk -> mmcm_clkout0
+  requirement   0.250 ns
+  ...
+  exception     -
+  cdc           Inter clock paths are considered valid unless explicitly
+                excluded by timing constraints such as set_clock_groups ...
+```
+
+**规约**：
+
+- `clocks` 行始终输出；`section_from_clock` 或 `section_to_clock` 为 `None`/空串时该侧显示 `-`，
+  例如 `- -> clk_x`；
+- `cdc` 行按总宽 76 列折行，首行前缀为 `"  cdc           "`（16 列），续行缩进 16 列；
+- 折行用标准库 `textwrap.wrap()`，内容宽度为 `76 - 16 = 60`；
+- `--format json` 不变，仍输出完整 `cdc_note` / `section_*_clock`；
+- 现有的 `--wide` 不改变 clocks / cdc 的显示规则。
+
+**参考实现骨架**：
+
+```python
+import textwrap
+
+def _wrap_labeled(label: str, text: str, width: int = 76,
+                  label_width: int = 14) -> list[str]:
+    prefix = f"  {label:<{label_width}}"
+    chunks = textwrap.wrap(
+        text, width=width - len(prefix),
+        break_long_words=True, break_on_hyphens=False)
+    if not chunks:
+        return []
+    return [prefix + chunks[0]] + [" " * len(prefix) + chunk for chunk in chunks[1:]]
+```
+
+`path_summary_lines()` 中：
+
+```python
+clocks = f"{path['section_from_clock'] or '-'} -> {path['section_to_clock'] or '-'}"
+lines.append(f"  clocks        {clocks}")
+...
+if path.get("cdc_note"):
+    lines.extend(_wrap_labeled("cdc", path["cdc_note"]))
+```
+
+**测试**：
+
+- `mini_timing` 的 path 1 输出包含 `clocks        clk_a -> clk_a`，不包含 `cdc`；
+- `edge_timing` 的 path 1 输出包含 `clocks        clk_x -> clk_y`，`cdc` 行的首段包含
+  `Inter clock paths`，续行以 16 个空格开头；
+- 所有 `cdc` 行长度不超过 76；
+- 增加一个 clocks 缺失的用例（可在临时库 `UPDATE path SET section_from_clock=NULL`），
+  断言输出 `- -> ...`；
+- `path --format json` 的键集合不变。
+
+**文档**：更新 `docs/design/cli.md` 的 `path` 示例和输出说明。
+
+### 8.3 3.4 `top --group` 子串匹配与空结果提示
+
+**CLI**（`commands/args.py`）：
+
+```python
+top.add_argument("--group", metavar="NAME",
+                 help="path group name (substring; use --exact for exact match)")
+top.add_argument("--exact", action="store_true",
+                 help="require an exact --group match")
+```
+
+**SQL**（`queries.top_sql`）：`filters` 增加 `group_exact`。
+
+```python
+if filters.get("group"):
+    if filters.get("group_exact"):
+        where.append("p.path_group = ?")
+        params.append(filters["group"])
+    else:
+        where.append("p.path_group LIKE ?")
+        params.append(f"%{filters['group']}%")
+```
+
+**空结果提示**：`cmd_top` 在 `rows` 为空时输出可读的过滤条件，而不只是 `no rows`：
+
+```text
+no rows (group~'shell_aclk' AND slack<0)
+```
+
+建议在 `commands/top.py` 增加一个纯函数：
+
+```python
+def _filter_hint(filters: dict) -> str:
+    """Return a compact description of the active top filters."""
+```
+
+规则：
+
+- `fail_only` → `slack<0`；
+- `max_slack` → `slack<NS`；
+- `group` → 默认 `group~'TEXT'`，`--exact` 时 `group='TEXT'`；
+- `type` → `type=Setup`；
+- `min_levels` → `levels>=N`；
+- `net` / `cell` → `net~'TEXT'` / `cell~'TEXT'`；
+- `site` → `site='SITE'`；
+- 多个条件用 ` AND ` 连接；没有过滤条件时保持原来的 `no rows`；
+- 提示仍写 stderr，退出码仍为 0。
+
+**大小写说明**：SQLite `LIKE` 对 ASCII 默认不区分大小写；需要严格区分时走 `sql` 命令。
+`--exact` 是精确的 `path_group = ?`，不受此影响。
+
+**兼容性**：默认从精确匹配变为子串匹配，属于不兼容的默认行为变化。脚本可用
+`--exact` 固定旧行为；需要在 `docs/design/cli.md` 和 `docs/guides/usage.md` 中注明。
+
+**测试**：
+
+- `top --group clk` 命中 `clk_a` / `clk_a_div2`；
+- `top --group clk --exact` 返回空；
+- `top --group clk_a --exact` 命中 path 1；
+- 空结果 stderr 为 `no rows (group~'...')`，`--exact` 时为 `group='...'`；
+- 现有 `tests/test_cli_contract.py::test_top_group_is_exact` 必须改写为
+  “默认子串 + `--exact` 精确”的用例；
+- `--help` 的选项测试加入 `--exact`。
+
+### 8.4 3.2 `path` 长名字省略
+
+**函数**（`commands/path.py`）：
+
+```python
+def shorten_name(name: str, limit: int = 80,
+                 head: int = 2, tail: int = 3) -> str:
+    """Keep the first ``head`` and last ``tail`` segments, eliding the middle."""
+```
+
+规则：
+
+- `name` 为空、`<hidden>`、或总长不超过 `limit` 时原样返回；
+- 按 `/` 分段；段数不超过 `head + tail` 时没有中间段可省；若原样仍超过 `limit`，
+  直接按字符兜底；
+- 否则输出 `"/".join(parts[:head]) + "/…/" + "/".join(parts[-tail:])`；
+- 如果结果仍超过 `limit`，逐步减少 `head`/`tail`，最后按 `limit - 1` 字符加 `…` 兜底，
+  保证返回值不超过 `limit`；
+- `--wide` 时跳过 `shorten_name()`，输出完整名字；
+- JSON 始终输出完整名字。
+
+**调用处**：`path_summary_lines(path, *, wide=False)` 在渲染 source/destination 时：
+
+```python
+site = path["src_site"] or ""
+prefix = "  source        "
+site_part = f"   {site}" if site else ""
+budget = 80 - len(prefix) - len(site_part)
+if budget < 8:
+    site_part = ""
+    budget = 80 - len(prefix)
+name = path["source_pin"] or "-"
+if not wide:
+    name = shorten_name(name, limit=max(1, budget))
+line = f"{prefix}{name}{site_part}".rstrip()
+```
+
+`destination` 同理。预算不足时省略站点列，因此默认输出中 source/destination 行
+不超过 80 列；`--wide` 不保证行宽。
+
+**测试**：
+
+- `shorten_name`：短名不变、`<hidden>` 不变、超长多段名含 `…` 且前 2/后 3 段保留；
+- 段数不足时原样返回；
+- 结果长度不超过 `limit`；
+- `path_summary_lines(path, wide=False)` 的 source/destination 行不超过 80；
+- `path_summary_lines(path, wide=True)` 使用完整 pin 名；
+- `path --format json` 仍是完整名字；
+- 现有 `path` 输出测试不因省略而失败（短名不受影响）。
+
+**文档**：更新 `docs/design/cli.md` 的 `path` 示例与 `--wide` 说明。
+
+### 8.5 3.3 `stats --by module` 增加过滤
+
+**CLI**（`commands/args.py`）：
+
+```python
+stats.add_argument("--fail-only", action="store_true",
+                   help="only count slack < 0 (module)")
+stats.add_argument("--group", metavar="TEXT",
+                   help="only paths whose group contains TEXT (module)")
+stats.add_argument("--prefix", metavar="TEXT",
+                   help="only prefixes containing TEXT (module)")
+```
+
+**SQL**（`queries.stats_module_sql`）：
+
+```python
+def stats_module_sql(level: int, side: str, min_paths: int, sort: str,
+                     limit: int, *, fail_only: bool = False,
+                     group: str | None = None,
+                     prefix: str | None = None) -> tuple[str, list]:
+    ...
+    if fail_only:
+        where.append("p.slack < 0")
+    if group:
+        where.append("p.path_group LIKE ?")
+        params.append(f"%{group}%")
+    if prefix:
+        where.append("n.prefix LIKE ?")
+        params.append(f"%{prefix}%")
+    ...
+    " HAVING COUNT(*) >= ?"
+    params.append(int(min_paths))
+```
+
+要点：
+
+- 三个过滤条件先于聚合，`PATHS` / `FAIL` / `WNS` / `TNS(SAMPLE)` 都是过滤后集合上的值；
+- `--min-paths` 作用于过滤后的计数，即 HAVING 在 WHERE 之后；
+- 三个条件之间是 AND；
+- `--prefix` 匹配的是当前 `--level` 下的 `hier_node.prefix`，不是完整 pin 名；
+- `--group` 与 3.4 一样使用子串 `LIKE`，ASCII 默认不区分大小写；
+- `--by group` / `--by clock-pair` 与这三个选项组合时应报用法错误（退出码 2），
+  而不是静默忽略：
+
+  ```python
+  if args.by != "module" and (args.fail_only or args.group or args.prefix):
+      raise CliError("--fail-only/--group/--prefix require --by module", EXIT_USAGE)
+  ```
+
+**示例**：
+
+```bash
+vtdb stats --by module --level 4 --fail-only --group shell_aclk --min-paths 5
+```
+
+**测试**：
+
+- `stats --by module --level 1 --fail-only` 只返回 `u_a`；
+- `--group div2` 只统计 `clk_a_div2` 的路径；
+- `--prefix u_a` 只返回 `u_a` 前缀；
+- 三个条件组合是 AND；
+- `--min-paths` 在过滤后生效；
+- `--by group` 加 `--fail-only` 返回退出码 2；
+- 现有 `stats` JSON 键集合不变。
+
+### 8.6 测试与文档汇总
+
+**新增/调整测试**：
+
+| 测试 | 覆盖 |
+| --- | --- |
+| `tests/test_commands.py`（建议新增） | `shorten_name()`、`path_summary_lines()` 的 clocks/cdc/wide、`_filter_hint()` |
+| `tests/test_cli.py` | `top --group` 子串/exact、stats 三种过滤、错误组合 |
+| `tests/test_cli_contract.py` | 更新 `test_top_group_is_exact`，`--help` 增加 `--exact` / stats 过滤项 |
+| `tests/test_parser.py` | 不需要改；解析器字段已存在 |
+
+**需要同步的文档**：
+
+- `docs/design/cli.md`：`top --group` / `--exact`、`path` clocks/cdc、`path --wide`、
+  `stats` 三个过滤选项、空结果提示；
+- `docs/guides/usage.md`：第 6 节“`--group` 匹配不到”改写为子串/`--exact` 说明；
+- `README.md`：如果快速开始示例涉及 `--group`，补上子串语义（当前示例未使用）；
+- `docs/design/improvements.md`：实现完成后把四项状态从“待实现”标记为“已实现”，
+  并记录实际改动量。
+
+**验收**：
+
+- 全部现有测试通过，新增用例覆盖上表；
+- `path` 的 clocks/cdc 行与 JSON 字段同时可用；
+- `top --group` 默认子串，`--exact` 精确，空结果提示可见；
+- `path` 默认输出不超过 80 列的 source/destination 行，`--wide` 完整；
+- `stats --by module` 的过滤结果与手写 SQL 一致；
+- 不涉及 `schema.sql`、`SCHEMA_VERSION` 或旧库重导。
+
+### 8.7 实施顺序与提交拆分
+
+建议拆成四个可独立 review 的提交：
+
+1. `feat(path): show launch/capture clocks and CDC notes` — 3.1；
+2. `feat(top): match path groups by substring with --exact` — 3.4，并改契约测试与文档；
+3. `feat(path): shorten long endpoint names` — 3.2；
+4. `feat(stats): filter module aggregation` — 3.3。
+
+每个提交单独跑 `python -m pytest tests -q`，并更新对应文档。3.4 是唯一改变默认行为的项，
+建议单独提交并在提交说明中写明兼容性。
