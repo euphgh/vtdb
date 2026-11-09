@@ -28,8 +28,12 @@ def top_sql(filters: dict, sort: str, wide: bool, limit: int) -> tuple[str, list
         where.append("p.slack < ?")
         params.append(filters["max_slack"])
     if filters.get("group"):
-        where.append("p.path_group = ?")
-        params.append(filters["group"])
+        if filters.get("group_exact"):
+            where.append("p.path_group = ?")
+            params.append(filters["group"])
+        else:
+            where.append("p.path_group LIKE ?")
+            params.append(f"%{filters['group']}%")
     if filters.get("type"):
         where.append("p.path_type = ?")
         params.append(filters["type"])
@@ -119,7 +123,9 @@ def stats_clock_pair_sql(sort: str, limit: int) -> tuple[str, list]:
 
 
 def stats_module_sql(level: int, side: str, min_paths: int, sort: str,
-                     limit: int) -> tuple[str, list]:
+                     limit: int, *, fail_only: bool = False,
+                     group: str | None = None,
+                     prefix: str | None = None) -> tuple[str, list]:
     """Build the ``stats --by module`` query.
 
     Args:
@@ -128,6 +134,9 @@ def stats_module_sql(level: int, side: str, min_paths: int, sort: str,
         min_paths: Minimum number of paths per prefix.
         sort: Sort key name.
         limit: Row limit.
+        fail_only: When true, count only violated paths.
+        group: Optional substring match on ``path_group``.
+        prefix: Optional substring match on the hierarchy prefix.
 
     Returns:
         SQL text and parameters.
@@ -137,6 +146,14 @@ def stats_module_sql(level: int, side: str, min_paths: int, sort: str,
     if side != "both":
         where.append("h.side = ?")
         params.append(side)
+    if fail_only:
+        where.append("p.slack < 0")
+    if group:
+        where.append("p.path_group LIKE ?")
+        params.append(f"%{group}%")
+    if prefix:
+        where.append("n.prefix LIKE ?")
+        params.append(f"%{prefix}%")
     sql = (
         "SELECT n.prefix AS prefix, COUNT(*) AS paths, SUM(p.slack < 0) AS fail,"
         " ROUND(MIN(p.slack), 3) AS wns,"
@@ -145,10 +162,10 @@ def stats_module_sql(level: int, side: str, min_paths: int, sort: str,
         " JOIN hier_node n ON n.id = h.prefix_id"
         " WHERE " + " AND ".join(where) +
         " GROUP BY n.prefix"
-        f" HAVING COUNT(*) >= {int(min_paths)}"
+        " HAVING COUNT(*) >= ?"
         f" ORDER BY {SORT_STATS.get(sort, SORT_STATS['wns'])} LIMIT ?"
     )
-    params.append(limit)
+    params.extend([int(min_paths), limit])
     return sql, params
 
 

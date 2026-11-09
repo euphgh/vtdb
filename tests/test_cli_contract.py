@@ -140,23 +140,37 @@ def test_top_csv_header(db: Path) -> None:
     assert len(lines) == 3
 
 
-def test_top_group_is_exact(db: Path) -> None:
-    """Characterization: ``--group`` currently requires the full group name."""
-    exact = json_rows(run_cli(
-        "top", "--db", db, "--group", "clk_a", "--format", "json"))
-    assert [row["seq"] for row in exact] == [1]
+def test_top_group_substring_and_exact(db: Path) -> None:
+    """``--group`` is a substring match; ``--exact`` restores equality."""
     partial = json_rows(run_cli(
         "top", "--db", db, "--group", "clk", "--format", "json"))
-    assert partial == []
+    assert [row["seq"] for row in partial] == [1, 2]
+
+    no_partial = json_rows(run_cli(
+        "top", "--db", db, "--group", "clk", "--exact", "--format", "json"))
+    assert no_partial == []
+
+    exact = json_rows(run_cli(
+        "top", "--db", db, "--group", "clk_a", "--exact", "--format", "json"))
+    assert [row["seq"] for row in exact] == [1]
 
 
 def test_empty_result_is_success(db: Path) -> None:
-    """An empty result is not an error and announces itself on stderr."""
+    """An empty result is not an error and announces the filter on stderr."""
     result = run_cli(
         "top", "--db", db, "--group", "does_not_exist", "--format", "json")
     assert result.returncode == 0
     assert json.loads(result.stdout) == []
-    assert "no rows" in result.stderr
+    assert "no rows (group~'does_not_exist')" in result.stderr
+
+    combined = run_cli(
+        "top", "--db", db, "--group", "does_not_exist", "--fail-only",
+        "--format", "json")
+    assert "slack<0 AND group~'does_not_exist'" in combined.stderr
+
+    exact = run_cli(
+        "top", "--db", db, "--group", "clk", "--exact", "--format", "json")
+    assert "no rows (group='clk')" in exact.stderr
 
 
 # -- argument surface -------------------------------------------------------
@@ -164,10 +178,11 @@ def test_empty_result_is_success(db: Path) -> None:
     ("command", "options"),
     [
         ("import", ["--keep-detail", "--dry-run", "--strict", "--force"]),
-        ("top", ["--fail-only", "--group", "--net", "--cell", "--site",
-                 "--sort", "--wide"]),
+        ("top", ["--fail-only", "--group", "--exact", "--net", "--cell",
+                 "--site", "--sort", "--wide"]),
         ("path", ["--no-segments", "--raw"]),
-        ("stats", ["--by", "--level", "--side", "--min-paths", "--sort"]),
+        ("stats", ["--by", "--level", "--side", "--fail-only", "--group",
+                   "--prefix", "--min-paths", "--sort"]),
         ("sql", ["--file", "--param", "--explain"]),
     ],
 )

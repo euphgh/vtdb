@@ -19,6 +19,11 @@ def cmd_stats(args: argparse.Namespace) -> int:
     Returns:
         Process exit code.
     """
+    if args.by != "module" and (args.fail_only or args.group or args.prefix):
+        raise CliError(
+            "--fail-only/--group/--prefix require --by module",
+            EXIT_USAGE,
+        )
     conn = open_query_db(args)
     if args.by == "group":
         sql, params = queries.stats_group_sql(args.sort, args.limit)
@@ -27,8 +32,9 @@ def cmd_stats(args: argparse.Namespace) -> int:
         sql, params = queries.stats_clock_pair_sql(args.sort, args.limit)
         columns = CLOCK_PAIR_COLUMNS
     else:
-        sql, params = queries.stats_module_sql(args.level, args.side, args.min_paths,
-                                               args.sort, args.limit)
+        sql, params = queries.stats_module_sql(
+            args.level, args.side, args.min_paths, args.sort, args.limit,
+            fail_only=args.fail_only, group=args.group, prefix=args.prefix)
         columns = MODULE_COLUMNS
         if conn.execute("SELECT 1 FROM hier_prefix LIMIT 1").fetchone() is None:
             raise CliError(

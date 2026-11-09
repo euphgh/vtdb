@@ -270,6 +270,42 @@ def test_stats_module_level(db: Path) -> None:
     assert {row["prefix"] for row in rows} == {"u_b/reg_b_reg[0]", "u_d/sink_reg[0]"}
 
 
+def test_stats_module_filters(db: Path) -> None:
+    """Module filters are applied before aggregation and combine with AND."""
+    rows = json_rows(run_cli(
+        "stats", "--db", db, "--by", "module", "--level", "1",
+        "--fail-only", "--format", "json"))
+    assert [(row["prefix"], row["paths"], row["fail"]) for row in rows] == [
+        ("u_a", 1, 1)]
+
+    rows = json_rows(run_cli(
+        "stats", "--db", db, "--by", "module", "--level", "1",
+        "--group", "div2", "--format", "json"))
+    assert [row["prefix"] for row in rows] == ["u_c"]
+
+    rows = json_rows(run_cli(
+        "stats", "--db", db, "--by", "module", "--level", "1",
+        "--prefix", "u_a", "--format", "json"))
+    assert [row["prefix"] for row in rows] == ["u_a"]
+
+    rows = json_rows(run_cli(
+        "stats", "--db", db, "--by", "module", "--level", "1",
+        "--group", "div2", "--prefix", "u_a", "--format", "json"))
+    assert rows == []
+
+    rows = json_rows(run_cli(
+        "stats", "--db", db, "--by", "module", "--level", "1",
+        "--fail-only", "--min-paths", "2", "--format", "json"))
+    assert rows == []
+
+
+def test_stats_module_filter_requires_module_mode(db: Path) -> None:
+    """The module filters are rejected for group/clock-pair aggregation."""
+    result = run_cli("stats", "--db", db, "--by", "group", "--fail-only")
+    assert result.returncode == 2
+    assert "require --by module" in result.stderr
+
+
 # -- sql --------------------------------------------------------------------
 def test_sql_select(db: Path) -> None:
     """Read-only queries return rows as JSON when requested."""

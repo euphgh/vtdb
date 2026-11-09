@@ -80,7 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common(top, "path to the SQLite database")
     top.add_argument("--fail-only", action="store_true", help="only slack < 0")
     top.add_argument("--max-slack", type=float, metavar="NS", help="only slack < NS")
-    top.add_argument("--group", metavar="NAME", help="exact path group match")
+    top.add_argument("--group", metavar="NAME",
+                     help="path group name (substring; use --exact for exact match)")
+    top.add_argument("--exact", action="store_true",
+                     help="require an exact --group match")
     top.add_argument("--type", dest="path_type",
                      choices=("Setup", "Hold", "Recovery", "Removal"))
     top.add_argument("--min-levels", type=int, metavar="N")
@@ -106,7 +109,8 @@ def build_parser() -> argparse.ArgumentParser:
     path.add_argument("--raw", action="store_true",
                       help="print the original report lines of this path")
     path.add_argument("--format", choices=("table", "json"), default="table")
-    path.add_argument("--wide", action="store_true")
+    path.add_argument("--wide", action="store_true",
+                       help="show full endpoint names and detail columns")
     path.add_argument("--color", choices=("auto", "always", "never"), default="auto")
     path.set_defaults(func=cmd_path)
 
@@ -121,6 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
     stats.add_argument("--by", choices=("group", "clock-pair", "module"), default="group")
     stats.add_argument("--level", type=int, default=3, help="hierarchy depth for --by module")
     stats.add_argument("--side", choices=("source", "dest", "both"), default="source")
+    stats.add_argument("--fail-only", action="store_true",
+                       help="only count slack < 0 (module)")
+    stats.add_argument("--group", metavar="TEXT",
+                       help="only paths whose group contains TEXT (module)")
+    stats.add_argument("--prefix", metavar="TEXT",
+                       help="only prefixes containing TEXT (module)")
     stats.add_argument("--min-paths", type=int, default=1)
     stats.add_argument("--sort", choices=tuple(queries.SORT_STATS), default="wns")
     stats.add_argument("-n", "--limit", type=int, default=20)
