@@ -121,17 +121,17 @@ report.rpt ──ReportParser──> DbWriter ──> SQLite ──queries──
    `docs/design/database.md`；用户可见行为改 `docs/guides/usage.md`。
 6. **大文件不要进内存**：200 MB 的报告必须流式处理，测试用迷你夹具。
 
-## 7. 当前待办
+## 7. 当前状态
 
-`docs/design/improvements.md` 里列了四项已评估的改进（结构重构已完成，以下是功能项），
-按建议顺序实施：
+`docs/design/improvements.md` 的四项功能改进（3.1–3.4）已在 2026-11-09 实现：
 
-1. `path` 输出增加 launch/capture 时钟与 CDC 说明；
-2. `top --group` 改为子串匹配（保留 `--exact`），空结果给出过滤提示；
-3. `path` 长名字默认省略中间层级；
-4. `stats --by module` 增加 `--fail-only` / `--group` / `--prefix`。
+1. `path` 输出 launch/capture 时钟与 CDC 说明；
+2. `top --group` 子串匹配，`--exact` 恢复精确匹配，空结果给出过滤提示；
+3. `path` 长名字默认省略中间层级，`--wide` 显示完整名字；
+4. `stats --by module` 支持 `--fail-only` / `--group` / `--prefix`。
 
-不要顺手扩大范围（端点数去重、TNS share、import 摘要增强都还没定口径）。
+暂无排期中的功能项。后续需求单独评估，不要顺手扩大范围（端点数去重、TNS share、
+import 摘要增强都还没定口径）。
 
 ## 8. 交付要求
 

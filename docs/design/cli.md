@@ -201,7 +201,8 @@ vtdb top [filters] [--sort FIELD] [-n N]
 | --- | --- |
 | `--fail-only` | 只显示 `slack < 0` |
 | `--max-slack NS` | 只显示 `slack < NS` |
-| `--group NAME` | 精确匹配 path group（时钟自动生成的组名较长，先用 `stats` 查） |
+| `--group NAME` | 子串匹配 path group（默认；组名较长时可直接用片段） |
+| `--exact` | 配合 `--group`，要求完整组名相等 |
 | `--type setup\|hold\|recovery\|removal` | path type |
 | `--min-levels N` | 逻辑级数下限 |
 | `--net PAT` | 只保留经过名字包含 `PAT` 的 net 的路径 |
@@ -223,16 +224,18 @@ vtdb top --fail-only -n 5
 规则：
 
 - 默认按 `slack` 升序；`--sort route` 用于找"布线主导"的路径；
-- `SOURCE` / `DEST` 默认显示单元名并截断到 40 字符，`--wide` 显示完整 pin 名；
+- `SOURCE` / `DEST` 默认显示单元名，由终端宽度截断，`--wide` 显示完整 pin 名；
 - 带 `Timing Exception` 的路径行尾标 `[exc]`；
-- `--net` / `--cell` 是子串匹配（`LIKE %PAT%`），`--site` 是精确匹配；
-- 这三个筛选项需要库中存在明细；用 `--keep-detail none` 导入的库执行时会报错，并提示重新导入；
-- 找不到匹配时输出 `no rows`，退出码 0。
+- `--group` / `--net` / `--cell` 是子串匹配（`LIKE %PAT%`），`--site` 是精确匹配；
+- `--group` 默认子串匹配，`--exact` 恢复完整相等；SQLite `LIKE` 对 ASCII 默认不区分大小写；
+- `--net` / `--cell` / `--site` 需要库中存在明细；用 `--keep-detail none` 导入的库执行时会报错，并提示重新导入；
+- 找不到匹配时输出 `no rows`，并在 stderr 附带过滤条件提示（如
+  `no rows (group~'shell_aclk')`），退出码 0。
 
 ### 6.3 `path`
 
 ```text
-vtdb path SEQ [--raw] [--no-segments]
+vtdb path SEQ [--raw] [--no-segments] [--wide]
 ```
 
 ```bash
@@ -244,6 +247,7 @@ path 42
   slack         -7.202 ns   VIOLATED
   type          Setup  (Max, Slow corner)
   group         xiangshan_i/u_role/inst/shell_aclk
+  clocks        xdma_ep_axi_aclk -> mmcm_clkout0
   requirement   4.000 ns
   data delay    10.544 ns   logic 2.478 (23.5%)  route 8.066 (76.5%)
   logic levels  31          LUT6=18 LUT5=6 CARRY8=7
@@ -261,6 +265,9 @@ data           3  SLICE_X1Y66    LUT6  Prop_H6LUT_..._O   0.089   2.897   .../O
 ...
 ```
 
+- `clocks` 行始终显示 launch/capture 时钟；`cdc` 行仅在报告给出
+  `Clock Domain Crossing` 说明时显示，按 76 列折行并缩进续行。
+- `source` / `destination` 默认省略中间层级；`--wide` 显示完整 pin 名。JSON 始终是完整名字。
 - `--raw` 打印原始报告 `line_start`–`line_end` 的文本，用于与 Vivado 输出逐字对照；
   源文件已移动时提示路径失效并返回退出码 4。
 - `--no-segments` 只打印摘要块。
@@ -277,7 +284,10 @@ vtdb stats [--by group|clock-pair|module] [options]
 | `--by` | `group`（默认）/ `clock-pair` / `module` |
 | `--level N` | `module` 模式下按前 N 级组件聚合，默认 3（`xiangshan_i/u_role/inst` 为 3） |
 | `--side source\|dest\|both` | `module` 模式下按源端/目的端/两者聚合，默认 `source` |
-| `--min-paths N` | 过滤样本过少的行 |
+| `--fail-only` | `module` 模式下只统计 `slack < 0` 的路径 |
+| `--group TEXT` | `module` 模式下只统计组名包含 `TEXT` 的路径 |
+| `--prefix TEXT` | `module` 模式下只聚合名字包含 `TEXT` 的层次前缀 |
+| `--min-paths N` | 过滤样本过少的行（在 `--fail-only` / `--group` / `--prefix` 之后生效） |
 | `--sort` | `wns`（默认）/ `tns` / `fail` / `paths` |
 
 ```bash
@@ -294,6 +304,7 @@ GTYE4_CHANNEL_TXOUTCLK[3]_3           2003     0    0.002        0.000       -
 
 ```bash
 vtdb stats --by module --level 3 --min-paths 10
+vtdb stats --by module --level 4 --fail-only --group shell_aclk
 ```
 
 ```text
@@ -305,6 +316,9 @@ xiangshan_i/aurora_64b66b_0   1923     0    0.105        0.000
 
 `TNS(SAMPLE)` 明确表示明细采样之和，不是报告里的全设计 TNS。全设计口径见
 `report.tns`（可用 `vtdb sql "SELECT tns FROM report"` 查看）。
+
+`--fail-only` / `--group` / `--prefix` 只对 `--by module` 生效；与其他 `--by` 组合
+时报用法错误（退出码 2）。
 
 `--no-hier` 导入的库执行 `--by module` 时报错，提示重新导入。
 
@@ -438,8 +452,10 @@ exception 路径。
 | `--dry-run` | 不生成 `.db` |
 | `--keep-detail negative` | 只有违例路径有明细 |
 | `top` 过滤 | `--fail-only` / `--group` / `--net` / `--cell` / `--site` 行数符合预期 |
-| `path` | 摘要字段与原始报告一致；`SEQ` 越界退出码 2 |
+| `top --group` | 默认子串匹配；`--exact` 精确匹配；空结果提示包含过滤条件 |
+| `path` | 摘要字段与原始报告一致；clocks / CDC 行；长名字省略与 `--wide`；`SEQ` 越界退出码 2 |
 | `stats` | 三种 `--by` 的输出列与聚合值正确 |
+| `stats --by module` 过滤 | `--fail-only` / `--group` / `--prefix` 先过滤后聚合；错误组合退出码 2 |
 | `sql` | `DELETE` 被拒绝（退出码 2）；`:param` 绑定生效 |
 | 输出格式 | `--format json` 可被 `json.loads`；csv 列数一致 |
 | 数据库定位 | `VTD_DB`、cwd 单库、多库报错（退出码 4） |

@@ -143,8 +143,9 @@ vtdb import <report> --force --keep-detail all
 
 **`--group` 匹配不到**
 
-当前 `--group` 是精确匹配，需要完整组名（可从 `vtdb stats --by group` 复制）。
-子串匹配在[改进评估](../design/improvements.md)中列为待实现项。
+`--group` 默认是子串匹配，可以直接用组名片段（如 `shell_aclk`）；需要完整相等时加
+`--exact`。空结果会在 stderr 给出过滤条件，例如 `no rows (group~'shell_aclk')`，
+便于区分“没有违例”和“名字没对上”。
 
 ## 7. 继续阅读
 

@@ -3,8 +3,8 @@
 本文评估 `vtdb` 在真实排障中暴露的四个可用性问题，回答三件事：是否真的需要改、改动量多大、
 改完之后的接口行为应该是什么。
 
-本文是**评估与设计说明**，不包含实现。评估对象为 `vtdb` 0.1.0，接口规范见
-[命令行接口设计](cli.md)。
+本文是**评估与实现记录**：第 1–7 节保留原始评估，第 8 节记录落地接口，末尾记录实现结果。
+评估对象为 `vtdb` 0.1.0，接口规范见[命令行接口设计](cli.md)。
 
 ## 1. 背景
 
@@ -215,6 +215,8 @@ $ echo $?
 
 ## 7. 复现命令
 
+以下命令保留为修复前的复现记录；3.4 现在默认子串匹配，要复现旧行为需显式加 `--exact`。
+
 ```bash
 # 3.1 缺少 clocks / cdc
 PYTHONPATH=src python3 -m vtdb path --db build/vtdb/part0.db 14438 --no-segments
@@ -226,14 +228,14 @@ PYTHONPATH=src python3 -m vtdb path --db build/vtdb/part0.db 10862 --no-segments
 # 3.3 无过滤
 PYTHONPATH=src python3 -m vtdb stats --db build/vtdb/part0.db --by module --level 4
 
-# 3.4 部分组名返回空
+# 3.4 修复前：部分组名返回空
 PYTHONPATH=src python3 -m vtdb top --db build/vtdb/part0.db --group shell_aclk --fail-only
 ```
 
 ## 8. 重构后的实现方案
 
 本节基于 Stage 0–5 之后的 `parser/` + `commands/` 结构，给出四项改动的最终落点、
-接口、SQL 和测试要求。**本节只是实施规约，尚未实现。**
+接口、SQL 和测试要求。四项已在 2026-11-09 按此规约实现；以下保留规约便于回溯。
 
 四项改动都不涉及 `schema.sql`、解析器和数据库迁移：所有需要的字段（`cdc_note`、
 `section_from_clock`、`section_to_clock`、`path_group`）已经在现有库中，旧库不需要重导。
@@ -352,7 +354,7 @@ if filters.get("group"):
 **空结果提示**：`cmd_top` 在 `rows` 为空时输出可读的过滤条件，而不只是 `no rows`：
 
 ```text
-no rows (group~'shell_aclk' AND slack<0)
+no rows (slack<0 AND group~'shell_aclk')
 ```
 
 建议在 `commands/top.py` 增加一个纯函数：
@@ -524,8 +526,7 @@ vtdb stats --by module --level 4 --fail-only --group shell_aclk --min-paths 5
   `stats` 三个过滤选项、空结果提示；
 - `docs/guides/usage.md`：第 6 节“`--group` 匹配不到”改写为子串/`--exact` 说明；
 - `README.md`：如果快速开始示例涉及 `--group`，补上子串语义（当前示例未使用）；
-- `docs/design/improvements.md`：实现完成后把四项状态从“待实现”标记为“已实现”，
-  并记录实际改动量。
+- `docs/design/improvements.md`：已在本节末尾 8.8 记录实现结果。
 
 **验收**：
 
@@ -547,3 +548,28 @@ vtdb stats --by module --level 4 --fail-only --group shell_aclk --min-paths 5
 
 每个提交单独跑 `python -m pytest tests -q`，并更新对应文档。3.4 是唯一改变默认行为的项，
 建议单独提交并在提交说明中写明兼容性。
+
+
+### 8.8 实现结果（2026-11-09）
+
+四项均已实现，未改 `schema.sql`、`SCHEMA_VERSION`，旧库不需要重导。
+
+| 项 | 实际落点 | 覆盖测试 |
+| --- | --- | --- |
+| 3.1 clocks / CDC | `commands/path.py`：`_wrap_labeled()`、`path_summary_lines()` | `tests/test_commands.py` |
+| 3.4 `--group` 子串 / `--exact` | `queries.top_sql()`、`commands/top.py`、`commands/args.py` | `tests/test_cli_contract.py` |
+| 3.2 长名字省略 | `commands/path.py`：`shorten_name()`、`_endpoint_line()`、`path_summary_lines(wide=)` | `tests/test_commands.py` |
+| 3.3 module 过滤 | `queries.stats_module_sql()`、`commands/stats.py`、`commands/args.py` | `tests/test_cli.py` |
+
+实现时的具体行为：
+
+- `path` 摘要新增 `clocks` 行；有 CDC 说明时按 76 列折行；
+- `top --group` 默认 `LIKE` 子串匹配，`--exact` 使用 `path_group = ?`；空结果提示包含过滤条件；
+- `path` 的 source/destination 默认省略中间层级并保证默认行宽不超过 80 列，`--wide` 输出完整名字；
+- `stats --by module` 的 `--fail-only` / `--group` / `--prefix` 在聚合前过滤，`--min-paths`
+  在过滤后生效；与其他 `--by` 组合返回退出码 2。
+
+验证结果：`python -m pytest tests -q` 共 73 个用例通过；`python -m compileall -q src`
+通过；`make zipapp` 后 `dist/vtdb.pyz --version` 正常。
+
+同步更新的文档：`docs/design/cli.md`、`docs/guides/usage.md`、`AGENTS.md`、本文件。
