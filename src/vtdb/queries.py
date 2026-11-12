@@ -199,3 +199,40 @@ def path_segments_sql(seq: int) -> tuple[str, list]:
         " WHERE s.path_seq = ? ORDER BY s.seq",
         [seq],
     )
+
+
+def summary_report_sql() -> tuple[str, list]:
+    """Build the query for the single ``report`` row.
+
+    Returns:
+        SQL text and empty parameters.
+    """
+    return "SELECT * FROM report", []
+
+
+def summary_paths_sql() -> tuple[str, list]:
+    """Build the query grouping paths by check type and detail retention.
+
+    Returns:
+        SQL text and empty parameters.
+    """
+    return (
+        "SELECT path_type, keep_detail, COUNT(*) AS count"
+        " FROM path GROUP BY path_type, keep_detail"
+        " ORDER BY path_type, keep_detail",
+        [],
+    )
+
+
+def summary_issues_sql() -> tuple[str, list]:
+    """Build the query grouping import issues by severity and code.
+
+    Returns:
+        SQL text and empty parameters.
+    """
+    return (
+        "SELECT severity, code, COUNT(*) AS count"
+        " FROM import_issue GROUP BY severity, code"
+        " ORDER BY severity, code",
+        [],
+    )

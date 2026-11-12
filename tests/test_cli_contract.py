@@ -183,6 +183,7 @@ def test_empty_result_is_success(db: Path) -> None:
         ("path", ["--no-segments", "--raw"]),
         ("stats", ["--by", "--level", "--side", "--fail-only", "--group",
                    "--prefix", "--min-paths", "--sort"]),
+        ("summary", ["--format", "--db"]),
         ("sql", ["--file", "--param", "--explain"]),
     ],
 )

@@ -3,7 +3,7 @@
 Turn one Vivado `report_timing_summary` text report into one SQLite database, so
 paths can be filtered, joined and aggregated with SQL instead of `grep`.
 
-One report per database, five commands, no service, no configuration file,
+One report per database, six commands, no service, no configuration file,
 Python standard library only.
 
 ## Install
@@ -26,6 +26,7 @@ vtdb top --fail-only -n 20                # worst paths
 vtdb path 42                              # one path with its detail rows
 vtdb stats --by group                     # aggregate by path group
 vtdb stats --by module --level 3          # aggregate by hierarchy prefix
+vtdb summary                             # report-level summary
 vtdb sql "SELECT COUNT(*) FROM path WHERE slack < 0"
 ```
 

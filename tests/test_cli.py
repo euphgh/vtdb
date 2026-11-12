@@ -370,3 +370,64 @@ def test_version() -> None:
     result = run_cli("--version")
     assert result.returncode == 0
     assert result.stdout.startswith("vtdb ")
+
+
+# -- summary ----------------------------------------------------------------
+def test_summary_json(db: Path) -> None:
+    """``summary --format json`` returns the three documented sections."""
+    payload = json.loads(run_cli(
+        "summary", "--db", db, "--format", "json").stdout)
+    assert set(payload) == {"metadata", "reported", "imported"}
+
+    assert payload["metadata"]["design_name"] == "mini_top"
+    assert payload["metadata"]["stage"] == "synth"
+
+    setup = payload["reported"]["setup"]
+    assert setup["wns"] == pytest.approx(-1.234)
+    assert setup["tns"] == pytest.approx(-1.234)
+    assert setup["failing_endpoints"] == 1
+    assert setup["total_endpoints"] == 2
+    assert payload["reported"]["hold"] == {
+        "available": False, "reason": "hold summary not captured"}
+    assert payload["reported"]["constraints_met"] is False
+    assert payload["reported"]["pulse_width"]["wpws"] == pytest.approx(0.800)
+
+    imported = payload["imported"]
+    assert imported["paths"] == 2
+    assert imported["paths_with_detail"] == 2
+    assert imported["paths_without_detail"] == 0
+    assert imported["paths_by_type"] == [
+        {"path_type": "Setup", "keep_detail": 1, "count": 2}]
+    assert imported["segments"] == 23
+    assert imported["pw_checks"] == 3
+    assert imported["delay_type"] == "max"
+    assert imported["max_paths"] == 1000
+    assert imported["issues"] == []
+
+
+def test_summary_text(db: Path) -> None:
+    """``summary`` prints grouped metadata, reported and imported sections."""
+    result = run_cli("summary", "--db", db)
+    assert result.returncode == 0
+    assert "metadata" in result.stdout
+    assert "reported" in result.stdout
+    assert "imported" in result.stdout
+    assert "hold" in result.stdout
+    assert "unavailable" in result.stdout
+    assert "not met" in result.stdout
+    assert "Setup=2" in result.stdout
+    assert "1000 (report option)" in result.stdout
+
+
+def test_summary_keep_detail_none(tmp_path: Path) -> None:
+    """``summary`` distinguishes detail omitted at import from missing data."""
+    target = tmp_path / "none.db"
+    assert import_fixture(target, "--keep-detail", "none", "--quiet").returncode == 0
+    payload = json.loads(run_cli(
+        "summary", "--db", target, "--format", "json").stdout)
+    assert payload["imported"]["paths"] == 2
+    assert payload["imported"]["paths_with_detail"] == 0
+    assert payload["imported"]["paths_without_detail"] == 2
+    assert payload["imported"]["segments"] == 0
+    assert payload["imported"]["paths_by_type"] == [
+        {"path_type": "Setup", "keep_detail": 0, "count": 2}]

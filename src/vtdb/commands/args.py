@@ -11,6 +11,7 @@ from .import_cmd import cmd_import
 from .path import cmd_path
 from .sql import cmd_sql
 from .stats import cmd_stats
+from .summary import cmd_summary
 from .top import cmd_top
 
 
@@ -138,6 +139,16 @@ def build_parser() -> argparse.ArgumentParser:
     stats.add_argument("--wide", action="store_true")
     stats.add_argument("--color", choices=("auto", "always", "never"), default="auto")
     stats.set_defaults(func=cmd_stats)
+
+    summary = sub.add_parser(
+        "summary", help="show a report-level summary",
+        description="Show report metadata, reported timing results and imported evidence.",
+        epilog="Example:\n  vtdb summary --db timing.db --format json",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    _add_common(summary, "path to the SQLite database")
+    summary.add_argument("--format", choices=("table", "json"), default="table")
+    summary.set_defaults(func=cmd_summary)
 
     sql = sub.add_parser(
         "sql", help="run a read-only SQL query",

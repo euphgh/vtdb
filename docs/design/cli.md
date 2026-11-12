@@ -115,6 +115,7 @@ vtdb <command> --help      # 每个命令自带 Examples 段
 | `top` | 按属性/拓扑筛路径并排序 | `vtdb top --fail-only -n 20` |
 | `path` | 查看单条路径的完整明细 | `vtdb path 42` |
 | `stats` | 按 group / clock pair / 模块聚合 | `vtdb stats --by group` |
+| `summary` | 显示报告级摘要 | `vtdb summary --db timing.db` |
 | `sql` | 执行只读 SQL | `vtdb sql "SELECT ..."` |
 
 ## 6. 命令详解
@@ -322,7 +323,24 @@ xiangshan_i/aurora_64b66b_0   1923     0    0.105        0.000
 
 `--no-hier` 导入的库执行 `--by module` 时报错，提示重新导入。
 
-### 6.5 `sql`
+### 6.5 `summary`
+
+```text
+vtdb summary [--format table|json]
+```
+
+按三块展示一份报告：
+
+- `metadata`：报告路径、sha256、工具版本、日期、design/device 等；
+- `reported`：报告的 setup WNS/TNS 与失败/总端点数、脉宽汇总、约束状态；hold 在
+  max-delay 报告下显示 `unavailable (hold summary not captured)`；
+- `imported`：采样路径数、保留明细路径数、按 path type 的分布、明细数、PW 数、
+  `delay_type` / `max_paths` 报告选项、导入告警。
+
+缺失值在 text 里是 `-`，在 JSON 里是 `null`。JSON 输出为
+`{"metadata": {...}, "reported": {...}, "imported": {...}}` 三段嵌套。
+
+### 6.6 `sql`
 
 ```text
 vtdb sql (QUERY | --file FILE) [--param k=v]... [--explain]

@@ -41,7 +41,10 @@ vtdb path 14438
 vtdb stats --by group
 vtdb stats --by module --level 3
 
-# 5) 需要自定义统计时直接写 SQL
+# 5) 看报告级摘要（元数据 / 报告结果 / 导入证据）
+vtdb summary
+
+# 6) 需要自定义统计时直接写 SQL
 vtdb sql "SELECT COUNT(*) FROM path WHERE slack < 0"
 ```
 

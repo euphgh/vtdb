@@ -14,7 +14,7 @@
 - 上游仓库：<https://github.com/euphgh/vtdb>
 - 许可证：MIT。
 
-设计上有意保持小：五个命令（`import` / `top` / `path` / `stats` / `sql`）、
+设计上有意保持小：六个命令（`import` / `top` / `path` / `stats` / `summary` / `sql`）、
 纯 Python 标准库、无服务、无配置文件。
 
 ## 2. 先读什么
@@ -43,7 +43,7 @@ src/vtdb/
 │   ├── segments.py   # 明细行拆分、pending 合并、段统计
 │   ├── model.py      # ParseResult / PathStats / CheckTimingRow
 │   └── report.py     # report 行构造
-├── commands/         # 五个子命令与 CLI 公共设施
+├── commands/         # 六个子命令与 CLI 公共设施
 │   ├── args.py       # argparse 命令树
 │   ├── common.py     # 退出码、找库、取数、格式化
 │   ├── columns.py    # 输出列定义
@@ -51,6 +51,7 @@ src/vtdb/
 │   ├── top.py        # top
 │   ├── path.py       # path 与摘要渲染
 │   ├── stats.py      # stats
+│   ├── summary.py    # summary
 │   └── sql.py        # sql
 ├── cli.py            # main + 异常映射（薄入口）
 ├── db.py             # SQLite 写入、schema 加载、resource/hier 字典化
