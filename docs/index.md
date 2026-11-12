@@ -14,15 +14,13 @@
 | [命令行接口](design/cli.md) | 命令、选项、输出格式、退出码 | 使用者、维护者 |
 | [GitHub Issues](https://github.com/euphgh/vtdb/issues) | 后续功能规划与讨论 | 维护者 |
 | [打包与分发](development/packaging.md) | uv / pip / pipx / zipapp / 单文件二进制 | 发布者 |
-| [迁移到独立仓库](development/extraction.md) | 从 REMUS 拆出的步骤与检查清单 | 维护者 |
 
 ## 推荐阅读顺序
 
 - 只想用工具：读[使用指南](guides/usage.md)，遇到问题时查[命令行接口](design/cli.md)。
 - 想改解析器或 schema：先读[数据模型](design/database.md)，再读[命令行接口](design/cli.md)。
 - 想了解后续功能规划：看 [GitHub Issues](https://github.com/euphgh/vtdb/issues)。
-- 想发布或拆分仓库：读[打包与分发](development/packaging.md)和
-  [迁移到独立仓库](development/extraction.md)。
+- 想发布或打包：读[打包与分发](development/packaging.md)。
 
 ## 仓库结构
 

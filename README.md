@@ -41,7 +41,6 @@ Start at [docs/index.md](docs/index.md):
 - [CLI reference](docs/design/cli.md) — commands, options, exit codes
 - [GitHub Issues](https://github.com/euphgh/vtdb/issues) — feature planning and discussion
 - [Packaging](docs/development/packaging.md) — uv / pip / zipapp / binaries
-- [Extraction](docs/development/extraction.md) — moving out of the REMUS repo
 
 ## Development
 

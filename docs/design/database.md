@@ -713,7 +713,7 @@ SQL
 ## 8. 导入工具
 
 工具名为 `vtdb`（Vivado Timing DataBase），是独立工具，不属于 REMUS 构建体系，
-已迁出到独立仓库（见[迁移记录](../development/extraction.md)）。
+已迁出到独立仓库。
 
 命令行接口——命令划分、选项、输出格式、退出码——见
 [命令行接口设计](cli.md)，本文不重复。

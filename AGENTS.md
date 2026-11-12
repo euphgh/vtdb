@@ -146,4 +146,3 @@ report.rpt ──ReportParser──> DbWriter ──> SQLite ──queries──
 
 `vtdb` 起源于 REMUS 仓库的 `tools/vtdb/`，现已迁出到独立仓库，REMUS 侧不再保留副本。
 **只维护本仓库**；需要查迁移前的历史时，使用 REMUS 迁出前的提交。
-迁移过程记录在 [`docs/development/extraction.md`](docs/development/extraction.md)。
