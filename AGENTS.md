@@ -26,7 +26,7 @@
 3. [`docs/guides/usage.md`](docs/guides/usage.md)：用户实际怎么用、怎么排障。
 4. [`docs/design/database.md`](docs/design/database.md)：报告结构、解析规则、SQLite schema。
 5. [`docs/design/cli.md`](docs/design/cli.md)：命令、选项、输出格式、退出码（接口契约）。
-6. [`docs/design/improvements.md`](docs/design/improvements.md)：已实现改进与当前接口行为。
+6. [GitHub Issues](https://github.com/euphgh/vtdb/issues)：后续功能规划与讨论。
 
 ## 3. 代码地图
 
@@ -124,15 +124,14 @@ report.rpt ──ReportParser──> DbWriter ──> SQLite ──queries──
 
 ## 7. 当前状态
 
-`docs/design/improvements.md` 的四项功能改进（3.1–3.4）已在 2026-11-09 实现：
+以下四项功能已在 2026-11-09 实现（实现记录见 git 历史）：
 
 1. `path` 输出 launch/capture 时钟与 CDC 说明；
 2. `top --group` 子串匹配，`--exact` 恢复精确匹配，空结果给出过滤提示；
 3. `path` 长名字默认省略中间层级，`--wide` 显示完整名字；
 4. `stats --by module` 支持 `--fail-only` / `--group` / `--prefix`。
 
-暂无排期中的功能项。后续需求单独评估，不要顺手扩大范围（端点数去重、TNS share、
-import 摘要增强都还没定口径）。
+后续功能规划与讨论转移到 [GitHub Issues](https://github.com/euphgh/vtdb/issues)。
 
 ## 8. 交付要求
 

@@ -39,7 +39,7 @@ Start at [docs/index.md](docs/index.md):
 - [Usage guide](docs/guides/usage.md) — install, quick start, triage recipes
 - [Data model](docs/design/database.md) — report structure, parser, SQLite schema
 - [CLI reference](docs/design/cli.md) — commands, options, exit codes
-- [Improvement plan](docs/design/improvements.md) — known usability gaps
+- [GitHub Issues](https://github.com/euphgh/vtdb/issues) — feature planning and discussion
 - [Packaging](docs/development/packaging.md) — uv / pip / zipapp / binaries
 - [Extraction](docs/development/extraction.md) — moving out of the REMUS repo
 

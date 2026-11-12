@@ -6,8 +6,8 @@
 `vtdb` 是**通用工具**，用于把 Vivado `report_timing_summary` 的文本报告转成 SQLite，
 不属于 REMUS 构建体系，已迁出到独立仓库。
 
-本文是**设计草案**，命令名与选项在实现前仍可能调整。已实现改进见
-[改进记录](improvements.md)。对应实现在 `src/vtdb/`。
+本文是**设计草案**，命令名与选项在实现前仍可能调整。后续功能规划与讨论见
+[GitHub Issues](https://github.com/euphgh/vtdb/issues)。对应实现在 `src/vtdb/`。
 
 ## 1. 定位与范围
 
