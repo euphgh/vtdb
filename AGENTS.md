@@ -26,7 +26,7 @@
 3. [`docs/guides/usage.md`](docs/guides/usage.md)：用户实际怎么用、怎么排障。
 4. [`docs/design/database.md`](docs/design/database.md)：报告结构、解析规则、SQLite schema。
 5. [`docs/design/cli.md`](docs/design/cli.md)：命令、选项、输出格式、退出码（接口契约）。
-6. [`docs/design/improvements.md`](docs/design/improvements.md)：已知可用性问题与下一步计划。
+6. [`docs/design/improvements.md`](docs/design/improvements.md)：已实现改进与当前接口行为。
 
 ## 3. 代码地图
 
@@ -60,6 +60,7 @@ src/vtdb/
 tests/test_cli.py          # 端到端 CLI 测试
 tests/test_cli_contract.py # JSON / 退出码 / help 契约
 tests/test_parser.py       # 解析器纯函数与路径级测试
+tests/test_commands.py     # 命令渲染、名称缩短
 tests/data/mini_timing.rpt # 裁剪过的真实格式夹具（折行、PW、汇总表）
 tests/data/edge_timing.rpt # hidden / CDC / exception / 折行夹具
 ```

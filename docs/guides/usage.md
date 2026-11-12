@@ -151,4 +151,4 @@ vtdb import <report> --force --keep-detail all
 
 - 命令与选项细节：[命令行接口](../design/cli.md)
 - 表结构与字段含义：[数据模型](../design/database.md)
-- 已知问题与改进计划：[改进评估](../design/improvements.md)
+- 已实现改进与接口行为：[改进记录](../design/improvements.md)

@@ -713,7 +713,7 @@ SQL
 ## 8. 导入工具
 
 工具名为 `vtdb`（Vivado Timing DataBase），是独立工具，不属于 REMUS 构建体系，
-后续会迁移到独立仓库。
+已迁出到独立仓库（见[迁移记录](../development/extraction.md)）。
 
 命令行接口——命令划分、选项、输出格式、退出码——见
 [命令行接口设计](cli.md)，本文不重复。
@@ -770,16 +770,7 @@ SQL
 - `Unconstrained Paths` 章节出现在存在未约束路径时；其 slack 可能为 `inf`/`NA`，
   `path.slack` 因此允许 NULL。
 
-## 11. 实施阶段
-
-| 阶段 | 内容 | 产出 |
-| --- | --- | --- |
-| P0 | 解析器骨架 + `report` / `path` / `path_segment` / 汇总表；不变量校验 | 能完整导入两份报告并通过校验 |
-| P1 | `clock` / `pw_check` / `check_timing` / `timing_exception` / `hier_prefix` / `resource` 维表 | 覆盖全部章节 |
-| P2 | 查询命令与输出格式、`hier_prefix` 聚合 | 日常分析可用 |
-| P3 | 接入 Vivado flow（可选），独立仓库发布 | 作为通用工具分发 |
-
-## 12. 待讨论
+## 11. 待讨论
 
 1. 默认不保存明细后，`resource` 维表是否仍有必要（此时只剩 `pw_check.pin_id` 在用）？
 2. `path_key` 的组成是否加入 `requirement_ns`，以区分同一端点在不同约束下的路径？

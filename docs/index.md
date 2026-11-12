@@ -12,7 +12,7 @@
 | [使用指南](guides/usage.md) | 安装、快速开始、命令配方、排障流程 | 使用者 |
 | [数据模型](design/database.md) | 报告结构、解析规则、SQLite schema、派生字段 | 维护者 |
 | [命令行接口](design/cli.md) | 命令、选项、输出格式、退出码 | 使用者、维护者 |
-| [改进评估](design/improvements.md) | 已知可用性问题、改动量与接口规约 | 维护者 |
+| [改进记录](design/improvements.md) | 已实现改进与当前接口行为 | 维护者 |
 | [打包与分发](development/packaging.md) | uv / pip / pipx / zipapp / 单文件二进制 | 发布者 |
 | [迁移到独立仓库](development/extraction.md) | 从 REMUS 拆出的步骤与检查清单 | 维护者 |
 
@@ -20,7 +20,7 @@
 
 - 只想用工具：读[使用指南](guides/usage.md)，遇到问题时查[命令行接口](design/cli.md)。
 - 想改解析器或 schema：先读[数据模型](design/database.md)，再读[命令行接口](design/cli.md)。
-- 想规划下一版：读[改进评估](design/improvements.md)。
+- 想了解已实现改进的接口行为：读[改进记录](design/improvements.md)。
 - 想发布或拆分仓库：读[打包与分发](development/packaging.md)和
   [迁移到独立仓库](development/extraction.md)。
 
